@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Veigh Studio",
+    "slug": "veigh-stickers",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/brand/icon.png",
+    "scheme": "veighstickers",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#09090b",
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "monochromeImage": "./assets/brand/monochrome.png"
+      }
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/brand/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/splash-icon.png",
+          "imageWidth": 150,
+          "resizeMode": "contain",
+          "backgroundColor": "#09090b"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Escolha uma foto para editar no Veigh Studio.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Permita acessar as fotos para editar sua imagem.",
+          "savePhotosPermission": "Permita salvar sua criação na galeria.",
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
