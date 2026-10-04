@@ -1,55 +1,39 @@
 {
   "expo": {
-    "name": "Veigh Studio",
-    "slug": "veigh-stickers",
+    "name": "StickerSmash",
+    "slug": "StickerSmash",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/brand/icon.png",
-    "scheme": "veighstickers",
-    "userInterfaceStyle": "dark",
+    "icon": "./assets/images/icon.png",
+    "scheme": "myapp",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#09090b",
-        "foregroundImage": "./assets/brand/adaptive-foreground.png",
-        "monochromeImage": "./assets/brand/monochrome.png"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
       }
     },
     "web": {
+      "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/brand/favicon.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/brand/splash-icon.png",
-          "imageWidth": 150,
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#09090b"
+          "backgroundColor": "#25292e"
         }
       ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Escolha uma foto para editar no Veigh Studio.",
-          "cameraPermission": false,
-          "microphonePermission": false
-        }
-      ],
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "Permita acessar as fotos para editar sua imagem.",
-          "savePhotosPermission": "Permita salvar sua criação na galeria.",
-          "granularPermissions": [
-            "photo"
-          ]
-        }
-      ]
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
