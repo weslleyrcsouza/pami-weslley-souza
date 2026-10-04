@@ -2,7 +2,12 @@ import domtoimage from "dom-to-image";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library/legacy";
 import { useEffect, useRef, useState } from "react";
-import { ImageSourcePropType, Platform, StyleSheet, View } from "react-native";
+import {
+  ImageSourcePropType,
+  Platform,
+  StyleSheet,
+  View,
+} from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { captureRef } from "react-native-view-shot";
 
@@ -18,40 +23,153 @@ const PlaceholderImage = require("@/assets/images/background-image.png");
 
 export default function Index() {
   const [selectedImage, setSelectedImage] = useState<string | undefined>(
-    undefined,
+    undefined
   );
-  const [showAppOptions, setShowAppOptions] = useState<boolean>(false);
-  const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+
+  const [showAppOptions, setShowAppOptions] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
   const [pickedEmoji, setPickedEmoji] = useState<
     ImageSourcePropType | undefined
   >(undefined);
+
   const [permissionResponse, requestPermission] =
     ImagePicker.useMediaLibraryPermissions();
+
   const imageRef = useRef<View>(null);
 
+  /*
+   * No navegador do iPhone, o arquivo precisa estar pronto
+   * ANTES do usuário tocar em Save.
+   *
+   * Caso contrário, o Safari pode bloquear a tela de
+   * compartilhamento.
+   */
+  const [webFile, setWebFile] = useState<File | null>(null);
+  const [webFilePreparing, setWebFilePreparing] = useState(false);
+
   useEffect(() => {
-    if (!permissionResponse?.granted) {
+    if (Platform.OS !== "web" && !permissionResponse?.granted) {
       requestPermission();
     }
-  }, []);
+  }, [permissionResponse, requestPermission]);
+
+  /*
+   * Prepara antecipadamente a imagem para o Safari/iPhone.
+   */
+  useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      !showAppOptions ||
+      !imageRef.current
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const prepareWebImage = async () => {
+      try {
+        setWebFilePreparing(true);
+
+        /*
+         * Pequena espera para garantir que a foto e o sticker
+         * terminaram de renderizar.
+         */
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        if (!imageRef.current || cancelled) {
+          return;
+        }
+
+        const blob = await domtoimage.toBlob(
+          imageRef.current as any,
+          {
+            width: 320,
+            height: 440,
+          }
+        );
+
+        if (!blob || cancelled) {
+          return;
+        }
+
+        const file = new File(
+          [blob],
+          "veigh-stickers.png",
+          {
+            type: "image/png",
+          }
+        );
+
+        if (!cancelled) {
+          setWebFile(file);
+          console.log("Imagem pronta para salvar no navegador.");
+        }
+      } catch (error) {
+        console.error(
+          "Erro ao preparar imagem para navegador:",
+          error
+        );
+      } finally {
+        if (!cancelled) {
+          setWebFilePreparing(false);
+        }
+      }
+    };
+
+    prepareWebImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedImage, pickedEmoji, showAppOptions]);
 
   const pickImageAsync = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 1,
-    });
+    try {
+      if (
+        Platform.OS !== "web" &&
+        !permissionResponse?.granted
+      ) {
+        const permission = await requestPermission();
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0].uri);
-      setShowAppOptions(true);
-    } else {
-      alert("You did not select any image.");
+        if (!permission.granted) {
+          alert(
+            "Permita o acesso às fotos para escolher uma imagem."
+          );
+          return;
+        }
+      }
+
+      const result =
+        await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          quality: 1,
+        });
+
+      if (!result.canceled) {
+        setSelectedImage(result.assets[0].uri);
+        setWebFile(null);
+        setShowAppOptions(true);
+      }
+    } catch (error) {
+      console.error(
+        "Erro ao escolher imagem:",
+        error
+      );
+
+      alert(
+        "Não foi possível abrir a galeria."
+      );
     }
   };
 
   const onReset = () => {
+    setSelectedImage(undefined);
+    setPickedEmoji(undefined);
     setShowAppOptions(false);
+    setWebFile(null);
   };
 
   const onAddSticker = () => {
@@ -63,56 +181,192 @@ export default function Index() {
   };
 
   const onSaveImageAsync = async () => {
-    if (Platform.OS !== "web") {
-      try {
-        const localUri = await captureRef(imageRef, {
-          height: 440,
-          quality: 1,
-        });
+    if (!imageRef.current) {
+      alert(
+        "A imagem ainda não está pronta para ser salva."
+      );
+      return;
+    }
 
-        await MediaLibrary.saveToLibraryAsync(localUri);
-        if (localUri) {
-          alert("Saved!");
+    /*
+     * =========================================================
+     * WEB / SAFARI / IPHONE
+     * =========================================================
+     */
+    if (Platform.OS === "web") {
+      try {
+        if (webFilePreparing) {
+          alert(
+            "A imagem ainda está sendo preparada. Aguarde um instante e toque em Save novamente."
+          );
+          return;
         }
-      } catch (e) {
-        console.log(e);
+
+        if (!webFile) {
+          alert(
+            "A imagem ainda não está pronta. Aguarde um instante e toque em Save novamente."
+          );
+          return;
+        }
+
+        const webNavigator = navigator as any;
+
+        /*
+         * iPhone/iPad:
+         * abre a folha de compartilhamento do iOS.
+         */
+        if (
+          webNavigator.share &&
+          (
+            !webNavigator.canShare ||
+            webNavigator.canShare({
+              files: [webFile],
+            })
+          )
+        ) {
+          await webNavigator.share({
+            files: [webFile],
+            title: "Veigh Stickers",
+          });
+
+          return;
+        }
+
+        /*
+         * Fallback para computador / outros navegadores.
+         */
+        const url =
+          URL.createObjectURL(webFile);
+
+        const link =
+          document.createElement("a");
+
+        link.href = url;
+        link.download =
+          "veigh-stickers.png";
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 2000);
+      } catch (error: any) {
+        /*
+         * Se o usuário fechar a tela de compartilhamento
+         * sem salvar, não mostramos erro.
+         */
+        if (
+          error?.name === "AbortError"
+        ) {
+          return;
+        }
+
+        console.error(
+          "Erro ao salvar no navegador:",
+          error
+        );
+
+        alert(
+          "Não foi possível salvar a imagem.\n\n" +
+            String(error)
+        );
       }
-    } else {
-      try {
-        const dataUrl = await domtoimage.toJpeg(imageRef.current, {
-          quality: 0.95,
-          width: 320,
-          height: 440,
+
+      return;
+    }
+
+    /*
+     * =========================================================
+     * EXPO GO / IPHONE / ANDROID NATIVO
+     * =========================================================
+     */
+    try {
+      const permission =
+        await MediaLibrary.requestPermissionsAsync(
+          true
+        );
+
+      if (!permission.granted) {
+        alert(
+          "Permita que o aplicativo salve imagens nas suas Fotos."
+        );
+        return;
+      }
+
+      const localUri =
+        await captureRef(imageRef, {
+          format: "png",
+          quality: 1,
+          result: "tmpfile",
         });
 
-        let link = document.createElement("a");
-        link.download = "sticker-smash.jpeg";
-        link.href = dataUrl;
-        link.click();
-      } catch (e) {
-        console.log(e);
-      }
+      console.log(
+        "Imagem criada em:",
+        localUri
+      );
+
+      await MediaLibrary.saveToLibraryAsync(
+        localUri
+      );
+
+      alert(
+        "Imagem salva na galeria! ✅"
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao salvar imagem:",
+        error
+      );
+
+      alert(
+        "Não foi possível salvar a imagem.\n\n" +
+          String(error)
+      );
     }
   };
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView
+      style={styles.container}
+    >
       <View style={styles.imageContainer}>
-        <View ref={imageRef} collapsable={false}>
+        <View
+          ref={imageRef}
+          collapsable={false}
+        >
           <ImageViewer
             imgSource={PlaceholderImage}
             selectedImage={selectedImage}
           />
+
           {pickedEmoji && (
-            <EmojiSticker imageSize={40} stickerSource={pickedEmoji} />
+            <EmojiSticker
+              imageSize={40}
+              stickerSource={pickedEmoji}
+            />
           )}
         </View>
       </View>
+
       {showAppOptions ? (
-        <View style={styles.optionsContainer}>
+        <View
+          style={styles.optionsContainer}
+        >
           <View style={styles.optionsRow}>
-            <IconButton icon="refresh" label="Reset" onPress={onReset} />
-            <CircleButton onPress={onAddSticker} />
+            <IconButton
+              icon="refresh"
+              label="Reset"
+              onPress={onReset}
+            />
+
+            <CircleButton
+              onPress={onAddSticker}
+            />
+
             <IconButton
               icon="save-alt"
               label="Save"
@@ -121,20 +375,38 @@ export default function Index() {
           </View>
         </View>
       ) : (
-        <View style={styles.footerContainer}>
+        <View
+          style={styles.footerContainer}
+        >
           <Button
             theme="primary"
             label="Choose a photo"
             onPress={pickImageAsync}
           />
+
           <Button
             label="Use this photo"
-            onPress={() => setShowAppOptions(true)}
+            onPress={() => {
+              setShowAppOptions(true);
+              setWebFile(null);
+            }}
           />
         </View>
       )}
-      <EmojiPicker isVisible={isModalVisible} onClose={onModalClose}>
-        <EmojiList onSelect={setPickedEmoji} onCloseModal={onModalClose} />
+
+      <EmojiPicker
+        isVisible={isModalVisible}
+        onClose={onModalClose}
+      >
+        <EmojiList
+          onSelect={(emoji) => {
+            setPickedEmoji(emoji);
+            setWebFile(null);
+          }}
+          onCloseModal={
+            onModalClose
+          }
+        />
       </EmojiPicker>
     </GestureHandlerRootView>
   );
@@ -146,17 +418,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#25292e",
     alignItems: "center",
   },
+
   imageContainer: {
     flex: 1,
+    paddingTop: 28,
   },
+
   footerContainer: {
     flex: 1 / 3,
     alignItems: "center",
   },
+
   optionsContainer: {
     position: "absolute",
     bottom: 80,
   },
+
   optionsRow: {
     alignItems: "center",
     flexDirection: "row",
